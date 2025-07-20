@@ -12,6 +12,8 @@ import {
   type InsertSideEffect,
   type InsertMedication 
 } from "@shared/schema";
+import { db } from "./db";
+import { eq, desc, sql } from "drizzle-orm";
 
 export interface IStorage {
   // User management
@@ -33,160 +35,92 @@ export interface IStorage {
   updateMedication(id: number, updates: Partial<Medication>): Promise<Medication | undefined>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private content: Map<number, Content>;
-  private sideEffects: Map<number, SideEffect>;
-  private medications: Map<number, Medication>;
-  private currentUserId: number;
-  private currentContentId: number;
-  private currentSideEffectId: number;
-  private currentMedicationId: number;
-
-  constructor() {
-    this.users = new Map();
-    this.content = new Map();
-    this.sideEffects = new Map();
-    this.medications = new Map();
-    this.currentUserId = 1;
-    this.currentContentId = 1;
-    this.currentSideEffectId = 1;
-    this.currentMedicationId = 1;
-    
-    this.seedData();
-  }
-
-  private seedData() {
-    // Seed educational content
-    const contentItems: InsertContent[] = [
-      {
-        title: "Low-Fat Smoothie Recipe",
-        description: "Easy-to-digest smoothie recipe specifically designed to help manage nausea during GLP-1 treatment.",
-        type: "nutrition",
-        tags: ["nausea", "high-fiber"],
-        url: "https://www.youtube.com/embed/dQw4w9WgXcQ",
-        duration: "5 min read"
-      },
-      {
-        title: "5-Minute Energy Boost Walk",
-        description: "Gentle walking routine designed to combat fatigue while maintaining your treatment schedule.",
-        type: "exercise", 
-        tags: ["fatigue"],
-        url: "https://www.youtube.com/embed/dQw4w9WgXcQ",
-        duration: "8 min watch"
-      },
-      {
-        title: "Managing Treatment Plateaus",
-        description: "Proven strategies to overcome weight loss plateaus during GLP-1 treatment.",
-        type: "behavioral",
-        tags: ["plateau", "motivation"],
-        url: "https://www.youtube.com/embed/dQw4w9WgXcQ",
-        duration: "12 min watch"
-      },
-      {
-        title: "Anti-Nausea Meal Planning",
-        description: "Weekly meal plans designed to minimize digestive side effects.",
-        type: "nutrition",
-        tags: ["nausea", "meal-planning"],
-        url: "https://www.youtube.com/embed/dQw4w9WgXcQ",
-        duration: "7 min read"
-      }
-    ];
-
-    contentItems.forEach(item => this.createContent(item));
-  }
-
+// DatabaseStorage implementation using PostgreSQL
+export class DatabaseStorage implements IStorage {
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(user => user.email === email);
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user || undefined;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.currentUserId++;
-    const user: User = { 
-      ...insertUser, 
-      id,
-      condition: insertUser.condition || null,
-      preferences: insertUser.preferences || null,
-      createdAt: new Date()
-    };
-    this.users.set(id, user);
+    const [user] = await db
+      .insert(users)
+      .values(insertUser as any)
+      .returning();
     return user;
   }
 
   async getContent(tags?: string[]): Promise<Content[]> {
-    const allContent = Array.from(this.content.values());
-    
     if (!tags || tags.length === 0) {
-      return allContent;
+      return await db.select().from(content);
     }
 
-    return allContent.filter(content => 
-      tags.some(tag => content.tags.includes(tag))
+    // Use raw SQL for jsonb array intersection check
+    const result = await db.execute(
+      sql`SELECT * FROM ${content} WHERE tags && ${JSON.stringify(tags)}::jsonb`
     );
+    
+    return result.rows as Content[];
   }
 
   async createContent(insertContent: InsertContent): Promise<Content> {
-    const id = this.currentContentId++;
-    const content: Content = {
-      ...insertContent,
-      id,
-      url: insertContent.url || null,
-      duration: insertContent.duration || null,
-      createdAt: new Date()
-    };
-    this.content.set(id, content);
-    return content;
+    const [newContent] = await db
+      .insert(content)
+      .values(insertContent as any)
+      .returning();
+    return newContent;
   }
 
   async createSideEffect(insertSideEffect: InsertSideEffect): Promise<SideEffect> {
-    const id = this.currentSideEffectId++;
-    const sideEffect: SideEffect = {
-      ...insertSideEffect,
-      id,
-      notes: insertSideEffect.notes || null,
-      timestamp: new Date()
-    };
-    this.sideEffects.set(id, sideEffect);
+    const [sideEffect] = await db
+      .insert(sideEffects)
+      .values(insertSideEffect)
+      .returning();
     return sideEffect;
   }
 
   async getSideEffectsByUser(userId: number, limit?: number): Promise<SideEffect[]> {
-    const userSideEffects = Array.from(this.sideEffects.values())
-      .filter(effect => effect.userId === userId)
-      .sort((a, b) => b.timestamp!.getTime() - a.timestamp!.getTime());
-    
-    return limit ? userSideEffects.slice(0, limit) : userSideEffects;
+    const query = db
+      .select()
+      .from(sideEffects)
+      .where(eq(sideEffects.userId, userId))
+      .orderBy(desc(sideEffects.timestamp));
+
+    if (limit) {
+      return await query.limit(limit);
+    }
+
+    return await query;
   }
 
   async createMedication(insertMedication: InsertMedication): Promise<Medication> {
-    const id = this.currentMedicationId++;
-    const medication: Medication = {
-      ...insertMedication,
-      id,
-      isActive: insertMedication.isActive !== undefined ? insertMedication.isActive : true,
-      createdAt: new Date()
-    };
-    this.medications.set(id, medication);
+    const [medication] = await db
+      .insert(medications)
+      .values(insertMedication)
+      .returning();
     return medication;
   }
 
   async getMedicationsByUser(userId: number): Promise<Medication[]> {
-    return Array.from(this.medications.values())
-      .filter(medication => medication.userId === userId && medication.isActive);
+    return await db
+      .select()
+      .from(medications)
+      .where(eq(medications.userId, userId));
   }
 
   async updateMedication(id: number, updates: Partial<Medication>): Promise<Medication | undefined> {
-    const medication = this.medications.get(id);
-    if (!medication) return undefined;
-    
-    const updated = { ...medication, ...updates };
-    this.medications.set(id, updated);
-    return updated;
+    const [medication] = await db
+      .update(medications)
+      .set(updates)
+      .where(eq(medications.id, id))
+      .returning();
+    return medication || undefined;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();

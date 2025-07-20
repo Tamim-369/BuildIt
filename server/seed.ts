@@ -1,7 +1,8 @@
 import { storage } from "./storage";
+import "./db"; // Initialize MongoDB connection
 
 async function seedDatabase() {
-  console.log("Seeding database with educational content...");
+  console.log("Seeding MongoDB database with educational content...");
 
   const contentItems = [
     {
@@ -43,9 +44,9 @@ async function seedDatabase() {
       await storage.createContent(item);
       console.log(`Created content: ${item.title}`);
     }
-    console.log("Database seeding completed successfully!");
+    console.log("MongoDB database seeding completed successfully!");
   } catch (error) {
-    console.error("Error seeding database:", error);
+    console.error("Error seeding MongoDB database:", error);
   }
 }
 

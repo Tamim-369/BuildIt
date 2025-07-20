@@ -1,15 +1,50 @@
-import { Pool, neonConfig } from '@neondatabase/serverless';
-import { drizzle } from 'drizzle-orm/neon-serverless';
-import ws from "ws";
-import * as schema from "@shared/schema";
+import mongoose from 'mongoose';
+import { MongoMemoryServer } from 'mongodb-memory-server';
 
-neonConfig.webSocketConstructor = ws;
+let mongoServer: MongoMemoryServer;
+let isConnected = false;
 
-if (!process.env.DATABASE_URL) {
-  throw new Error(
-    "DATABASE_URL must be set. Did you forget to provision a database?",
-  );
+export async function connectToDatabase() {
+  if (isConnected) {
+    return;
+  }
+
+  try {
+    // Use MongoDB Memory Server for development
+    if (process.env.NODE_ENV !== 'production') {
+      mongoServer = await MongoMemoryServer.create();
+      const uri = mongoServer.getUri();
+      await mongoose.connect(uri);
+      console.log('Connected to MongoDB Memory Server successfully');
+    } else {
+      // Use provided MongoDB URI for production
+      const MONGODB_URI = process.env.MONGODB_URI;
+      if (!MONGODB_URI) {
+        throw new Error('MONGODB_URI environment variable is required in production');
+      }
+      await mongoose.connect(MONGODB_URI);
+      console.log('Connected to MongoDB successfully');
+    }
+    
+    isConnected = true;
+  } catch (error) {
+    console.error('MongoDB connection error:', error);
+    throw error;
+  }
 }
 
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-export const db = drizzle({ client: pool, schema });
+export async function disconnectFromDatabase() {
+  if (isConnected) {
+    await mongoose.disconnect();
+    if (mongoServer) {
+      await mongoServer.stop();
+    }
+    isConnected = false;
+    console.log('Disconnected from MongoDB');
+  }
+}
+
+// Initialize connection when the module is imported
+connectToDatabase().catch(console.error);
+
+export default mongoose;

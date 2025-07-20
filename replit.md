@@ -69,8 +69,8 @@ The application manages four core entities:
 - React Hook Form with Zod validation (configured but not fully implemented)
 
 ### Backend Services
-- Drizzle ORM for database operations (PostgreSQL dialect)
-- Neon Database for cloud PostgreSQL hosting
+- MongoDB with Mongoose ODM for database operations
+- MongoDB Memory Server for development environment
 - bcryptjs for secure password hashing
 - jsonwebtoken for authentication
 
@@ -93,8 +93,9 @@ The application manages four core entities:
 - Containerization-ready structure
 
 ### Database Strategy
-- Drizzle ORM configured for PostgreSQL
-- Migration system for schema changes
-- Prepared for cloud database deployment (Neon Database recommended)
+- MongoDB with Mongoose ODM
+- Schema-based data modeling with validation
+- In-memory MongoDB server for development
+- Prepared for cloud MongoDB deployment (MongoDB Atlas recommended)
 
 The application is designed with scalability in mind, using modern development practices and a modular architecture that can easily adapt to growing user needs and feature requirements.

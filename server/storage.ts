@@ -1,8 +1,8 @@
 import { 
-  users, 
-  content, 
-  sideEffects, 
-  medications,
+  UserModel,
+  ContentModel,
+  SideEffectModel,
+  MedicationModel,
   type User, 
   type Content,
   type SideEffect,
@@ -12,114 +12,194 @@ import {
   type InsertSideEffect,
   type InsertMedication 
 } from "@shared/schema";
-import { db } from "./db";
-import { eq, desc, sql } from "drizzle-orm";
+import "./db"; // Initialize MongoDB connection
+
+// Helper function to convert MongoDB document to our expected format
+function convertUser(doc: any): User {
+  return {
+    id: doc._id.toString(),
+    email: doc.email,
+    password: doc.password,
+    firstName: doc.firstName,
+    lastName: doc.lastName,
+    condition: doc.condition || null,
+    preferences: doc.preferences || null,
+    createdAt: doc.createdAt || null
+  };
+}
+
+function convertContent(doc: any): Content {
+  return {
+    id: doc._id.toString(),
+    title: doc.title,
+    description: doc.description,
+    type: doc.type,
+    tags: doc.tags,
+    url: doc.url || null,
+    duration: doc.duration || null,
+    createdAt: doc.createdAt || null
+  };
+}
+
+function convertSideEffect(doc: any): SideEffect {
+  return {
+    id: doc._id.toString(),
+    userId: doc.userId,
+    symptom: doc.symptom,
+    severity: doc.severity,
+    notes: doc.notes || null,
+    timestamp: doc.timestamp || null
+  };
+}
+
+function convertMedication(doc: any): Medication {
+  return {
+    id: doc._id.toString(),
+    userId: doc.userId,
+    name: doc.name,
+    dosage: doc.dosage,
+    frequency: doc.frequency,
+    timeOfDay: doc.timeOfDay || null,
+    isActive: doc.isActive,
+    createdAt: doc.createdAt || null
+  };
+}
 
 export interface IStorage {
   // User management
-  getUser(id: number): Promise<User | undefined>;
+  getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
-  
+  createUser(insertUser: InsertUser): Promise<User>;
+
   // Content management
   getContent(tags?: string[]): Promise<Content[]>;
-  createContent(content: InsertContent): Promise<Content>;
-  
-  // Side effects
-  createSideEffect(sideEffect: InsertSideEffect): Promise<SideEffect>;
-  getSideEffectsByUser(userId: number, limit?: number): Promise<SideEffect[]>;
-  
-  // Medications
-  createMedication(medication: InsertMedication): Promise<Medication>;
-  getMedicationsByUser(userId: number): Promise<Medication[]>;
-  updateMedication(id: number, updates: Partial<Medication>): Promise<Medication | undefined>;
+  createContent(insertContent: InsertContent): Promise<Content>;
+
+  // Side effects tracking
+  createSideEffect(insertSideEffect: InsertSideEffect): Promise<SideEffect>;
+  getSideEffectsByUser(userId: string, limit?: number): Promise<SideEffect[]>;
+
+  // Medication management
+  createMedication(insertMedication: InsertMedication): Promise<Medication>;
+  getMedicationsByUser(userId: string): Promise<Medication[]>;
+  updateMedication(id: string, updates: Partial<Medication>): Promise<Medication | undefined>;
 }
 
-// DatabaseStorage implementation using PostgreSQL
+// MongoDB Storage implementation
 export class DatabaseStorage implements IStorage {
-  async getUser(id: number): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
-    return user || undefined;
+  async getUser(id: string): Promise<User | undefined> {
+    try {
+      const user = await UserModel.findById(id);
+      return user ? convertUser(user) : undefined;
+    } catch (error) {
+      console.error('Error getting user:', error);
+      return undefined;
+    }
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.email, email));
-    return user || undefined;
+    try {
+      const user = await UserModel.findOne({ email });
+      return user ? convertUser(user) : undefined;
+    } catch (error) {
+      console.error('Error getting user by email:', error);
+      return undefined;
+    }
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await db
-      .insert(users)
-      .values(insertUser as any)
-      .returning();
-    return user;
+    try {
+      const user = new UserModel(insertUser);
+      const savedUser = await user.save();
+      return convertUser(savedUser);
+    } catch (error) {
+      console.error('Error creating user:', error);
+      throw error;
+    }
   }
 
   async getContent(tags?: string[]): Promise<Content[]> {
-    if (!tags || tags.length === 0) {
-      return await db.select().from(content);
+    try {
+      let query = {};
+      if (tags && tags.length > 0) {
+        query = { tags: { $in: tags } };
+      }
+      
+      const content = await ContentModel.find(query);
+      return content.map(convertContent);
+    } catch (error) {
+      console.error('Error getting content:', error);
+      return [];
     }
-
-    // Use raw SQL for jsonb array intersection check
-    const result = await db.execute(
-      sql`SELECT * FROM ${content} WHERE tags && ${JSON.stringify(tags)}::jsonb`
-    );
-    
-    return result.rows as Content[];
   }
 
   async createContent(insertContent: InsertContent): Promise<Content> {
-    const [newContent] = await db
-      .insert(content)
-      .values(insertContent as any)
-      .returning();
-    return newContent;
+    try {
+      const content = new ContentModel(insertContent);
+      const savedContent = await content.save();
+      return convertContent(savedContent);
+    } catch (error) {
+      console.error('Error creating content:', error);
+      throw error;
+    }
   }
 
   async createSideEffect(insertSideEffect: InsertSideEffect): Promise<SideEffect> {
-    const [sideEffect] = await db
-      .insert(sideEffects)
-      .values(insertSideEffect)
-      .returning();
-    return sideEffect;
+    try {
+      const sideEffect = new SideEffectModel(insertSideEffect);
+      const savedSideEffect = await sideEffect.save();
+      return convertSideEffect(savedSideEffect);
+    } catch (error) {
+      console.error('Error creating side effect:', error);
+      throw error;
+    }
   }
 
-  async getSideEffectsByUser(userId: number, limit?: number): Promise<SideEffect[]> {
-    const query = db
-      .select()
-      .from(sideEffects)
-      .where(eq(sideEffects.userId, userId))
-      .orderBy(desc(sideEffects.timestamp));
-
-    if (limit) {
-      return await query.limit(limit);
+  async getSideEffectsByUser(userId: string, limit?: number): Promise<SideEffect[]> {
+    try {
+      let query = SideEffectModel.find({ userId }).sort({ timestamp: -1 });
+      
+      if (limit) {
+        query = query.limit(limit);
+      }
+      
+      const sideEffects = await query;
+      return sideEffects.map(convertSideEffect);
+    } catch (error) {
+      console.error('Error getting side effects:', error);
+      return [];
     }
-
-    return await query;
   }
 
   async createMedication(insertMedication: InsertMedication): Promise<Medication> {
-    const [medication] = await db
-      .insert(medications)
-      .values(insertMedication)
-      .returning();
-    return medication;
+    try {
+      const medication = new MedicationModel(insertMedication);
+      const savedMedication = await medication.save();
+      return convertMedication(savedMedication);
+    } catch (error) {
+      console.error('Error creating medication:', error);
+      throw error;
+    }
   }
 
-  async getMedicationsByUser(userId: number): Promise<Medication[]> {
-    return await db
-      .select()
-      .from(medications)
-      .where(eq(medications.userId, userId));
+  async getMedicationsByUser(userId: string): Promise<Medication[]> {
+    try {
+      const medications = await MedicationModel.find({ userId, isActive: true });
+      return medications.map(convertMedication);
+    } catch (error) {
+      console.error('Error getting medications:', error);
+      return [];
+    }
   }
 
-  async updateMedication(id: number, updates: Partial<Medication>): Promise<Medication | undefined> {
-    const [medication] = await db
-      .update(medications)
-      .set(updates)
-      .where(eq(medications.id, id))
-      .returning();
-    return medication || undefined;
+  async updateMedication(id: string, updates: Partial<Medication>): Promise<Medication | undefined> {
+    try {
+      const medication = await MedicationModel.findByIdAndUpdate(id, updates, { new: true });
+      return medication ? convertMedication(medication) : undefined;
+    } catch (error) {
+      console.error('Error updating medication:', error);
+      return undefined;
+    }
   }
 }
 

@@ -16,7 +16,7 @@ import { format } from "date-fns";
 export default function SymptomTracker() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  
+
   const [formData, setFormData] = useState({
     symptom: "",
     severity: 5,
@@ -85,7 +85,7 @@ export default function SymptomTracker() {
   return (
     <section>
       <h2 className="text-2xl font-bold text-dark-gray mb-6">Symptom Tracker</h2>
-      
+
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Log Today's Symptoms</CardTitle>
@@ -95,8 +95,8 @@ export default function SymptomTracker() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="symptom-select">Symptom Type</Label>
-                <Select 
-                  value={formData.symptom} 
+                <Select
+                  value={formData.symptom}
                   onValueChange={(value) => setFormData({ ...formData, symptom: value })}
                 >
                   <SelectTrigger id="symptom-select" className="focus-ring">
@@ -113,10 +113,10 @@ export default function SymptomTracker() {
                   </SelectContent>
                 </Select>
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="severity-slider">
-                  Severity Level: 
+                  Severity Level:
                   <span className="font-bold text-primary ml-1">
                     {formData.severity}/10
                   </span>
@@ -139,7 +139,7 @@ export default function SymptomTracker() {
                 </div>
               </div>
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="symptom-notes">Additional Notes (Optional)</Label>
               <Textarea
@@ -151,7 +151,7 @@ export default function SymptomTracker() {
                 className="focus-ring"
               />
             </div>
-            
+
             <Button
               type="submit"
               className="bg-primary hover:bg-primary/90 focus-ring"
@@ -160,11 +160,11 @@ export default function SymptomTracker() {
               {logSymptomMutation.isPending ? "Logging..." : "Log Symptom"}
             </Button>
           </form>
-          
+
           {/* Recent Symptoms */}
           <div className="mt-8 pt-6 border-t border-border">
             <h4 className="text-lg font-semibold text-dark-gray mb-4">Recent Entries</h4>
-            
+
             {isLoading ? (
               <div className="space-y-3">
                 {[1, 2, 3].map((i) => (

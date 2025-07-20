@@ -1,0 +1,256 @@
+You are a world-class software engineer tasked with building a scalable, responsive web-based Metabolic Health Coach application on Replit to support obesity/GLP-1 treatment (e.g., Semaglutide) patients. The app uses **React.js** (CDN-hosted via cdn.jsdelivr.net with JSX and Babel), **Tailwind CSS** for styling, **Express.js** for the backend, and **MongoDB** (via MongoDB Atlas) as the database, with Firebase used only for Cloud Messaging and Analytics. The app enhances patient adherence by addressing barriers like side effects (68% dropout rate), plateaus, and knowledge gaps through a personalized educational content library, side effect tracking, and dose management, while generating real-world data (RWD) for lifestyle/drug synergies. The MVP focuses on these core features, with offline access and a foundation for Phase 2 (wearable integration, AI adherence predictors) and Phase 3 (AR tutorials, community forums). Authentication will be custom-built (no third-party providers like Google/Apple), using JWT for session management. Follow these detailed, step-by-step instructions to create, test, and deploy the app on Replit, ensuring it’s production-ready.
+
+### Step-by-Step Instructions
+
+#### Step 1: Set Up Replit Project
+1. **Create a New Repl**:
+   - In Replit, start a new project using the "Node.js" template and name it `MetabolicHealthCoach`.
+2. **Configure Package Dependencies**:
+   - Create a `package.json` file in the root directory:
+     - Set the project name to `metabolic-health-coach`, version `1.0.0`.
+     - Include scripts: `"start": "node server.js"`, `"dev": "nodemon server.js"`.
+     - List dependencies: `express` (4.21.0 or latest), `mongodb` (6.9.0 or latest), `jsonwebtoken` (9.0.2 or latest), `bcryptjs` (2.4.3 or latest), `firebase` (10.14.1 or latest, for Cloud Messaging and Analytics), `cors` (2.8.5 or latest), `dotenv` (16.4.5 or latest).
+     - List devDependencies: `nodemon` (3.1.7 or latest).
+   - Run `npm install` in the Replit shell to install packages.
+3. **Set Up File Structure**:
+   - Create the following structure:
+     ```
+     ├── index.html
+     ├── server.js
+     ├── src/
+     │   ├── App.jsx
+     │   ├── components/
+     │   │   ├── Navbar.jsx
+     │   │   ├── ContentCard.jsx
+     │   │   ├── SideEffectTracker.jsx
+     │   │   ├── DoseReminder.jsx
+     │   ├── styles.css
+     │   ├── lib/
+     │   │   ├── mongodb.js
+     │   │   ├── firebase.js
+     ├── public/
+     │   ├── favicon.ico
+     │   ├── service-worker.js
+     ├── routes/
+     │   ├── auth.js
+     │   ├── content.js
+     │   ├── sideEffects.js
+     │   ├── schedules.js
+     ├── package.json
+     ├── .env
+     ```
+   - The `public` folder holds static assets. `src` contains React components and utilities. `routes` contains Express.js API routes. `server.js` is the Express server.
+
+#### Step 2: Configure MongoDB and Firebase
+1. **Set Up MongoDB Atlas**:
+   - Go to [MongoDB Atlas](https://cloud.mongodb.com), create a new project named `MetabolicHealthCoach`, and set up a free cluster.
+   - Create a database user and allow network access (use `0.0.0.0/0` for Replit).
+   - Copy the MongoDB connection string (e.g., `mongodb+srv://<user>:<password>@cluster0.mongodb.net`).
+   - Create a database named `metabolic_health` with collections:
+     - `users`: `{ userId: string, email: string, password: string (hashed), condition: string (diabetes/obesity), preferences: object (food, energy levels), sideEffects: array }`.
+     - `content`: `{ contentId: string, title: string, description: string, type: string (nutrition/exercise/behavioral), tags: array (e.g., ["nausea", "diabetes"]), url: string (YouTube link or text) }`.
+     - `sideEffects`: `{ logId: string, userId: string, symptom: string (nausea/fatigue), severity: number, timestamp: date, notes: string }`.
+     - `schedules`: `{ scheduleId: string, userId: string, medication: string, dose: string, time: date, frequency: string }`.
+2. **Configure MongoDB Connection**:
+   - Create `src/lib/mongodb.js`:
+     - Use the `mongodb` package to connect to MongoDB Atlas.
+     - Export an async function to initialize the client and return the `metabolic_health` database.
+     - Cache the connection for reuse in Express routes.
+   - Store the connection string in `.env` (e.g., `MONGODB_URI=mongodb+srv://...`).
+3. **Set Up Firebase (Cloud Messaging and Analytics Only)**:
+   - In the Firebase Console (console.firebase.google.com), create a project named `MetabolicHealthCoach`.
+   - Enable Cloud Messaging and Analytics.
+   - Copy the Firebase configuration object (`apiKey`, `authDomain`, `projectId`, `storageBucket`, `messagingSenderId`, `appId`, `measurementId`).
+   - Generate a VAPID key for Cloud Messaging.
+   - Create `src/lib/firebase.js`:
+     - Initialize Firebase app, Analytics, and Cloud Messaging.
+     - Export `analytics` and `messaging` instances.
+     - Add a function to request notification permissions using `getToken` with the VAPID key.
+   - Store Firebase config in `.env` (e.g., `FIREBASE_API_KEY=...`).
+4. **Set Up Environment Variables**:
+   - Create `.env` in the root directory:
+     - Add `MONGODB_URI`, `JWT_SECRET` (random string for JWT), `FIREBASE_API_KEY`, `FIREBASE_AUTH_DOMAIN`, `FIREBASE_PROJECT_ID`, `FIREBASE_STORAGE_BUCKET`, `FIREBASE_MESSAGING_SENDER_ID`, `FIREBASE_APP_ID`, `FIREBASE_MEASUREMENT_ID`, `FIREBASE_VAPID_KEY`.
+   - Use Replit’s Secrets feature to load `.env` variables securely.
+
+#### Step 3: Build the Express.js Backend
+1. **Create the Express Server** (`server.js`):
+   - Initialize an Express app.
+   - Use middleware: `express.json()`, `cors` (allow all origins for development), `express.static('public')` to serve static files.
+   - Mount routes from `routes/` (auth, content, sideEffects, schedules).
+   - Start the server on `process.env.PORT` or 3000.
+2. **Create Authentication Routes** (`routes/auth.js`):
+   - Create an Express router with:
+     - POST `/api/auth/register`: Accept `{ email, password }`, hash password with `bcryptjs`, save to MongoDB `users` (`userId: uuid`, `email`, `password`, `condition: null`, `preferences: {}`, `sideEffects: []`), return a JWT (signed with `JWT_SECRET`) in a `Set-Cookie` header.
+     - POST `/api/auth/login`: Accept `{ email, password }`, verify password against MongoDB `users` with `bcryptjs`, return a JWT cookie.
+     - GET `/api/auth/verify`: Verify JWT from cookie, return user data (`userId`, `email`, `condition`).
+   - Use a middleware to verify JWT for protected routes (extract `userId` from token).
+3. **Create Content Route** (`routes/content.js`):
+   - Create an Express router with:
+     - GET `/api/content`: Accept query params (e.g., `tags=nausea,diabetes`), query MongoDB `content` collection with `$in` for tags, return content array.
+4. **Create Side Effects Route** (`routes/sideEffects.js`):
+   - Create an Express router with:
+     - POST `/api/sideEffects`: Accept `{ userId, symptom, severity, timestamp, notes }`, verify JWT, save to MongoDB `sideEffects`.
+     - GET `/api/sideEffects`: Accept `userId` and `limit` query params, verify JWT, return recent logs.
+5. **Create Schedules Route** (`routes/schedules.js`):
+   - Create an Express router with:
+     - POST `/api/schedules`: Accept `{ userId, medication, dose, time, frequency }`, verify JWT, save to MongoDB `schedules`.
+     - GET `/api/schedules`: Accept `userId`, verify JWT, return schedules.
+
+#### Step 4: Build the Frontend
+1. **Create the Main HTML File** (`index.html`):
+   - Set up an HTML5 structure with `<div id="root">` for React rendering.
+   - Include CDN scripts: `react` (18.3.1 or latest), `react-dom` (18.3.1 or latest), `babel` (7.26.0 or latest) from cdn.jsdelivr.net.
+   - Include Tailwind CSS CDN (3.4.13 or latest).
+   - Link to `styles.css` and `src/App.jsx` (use `type="text/babel"`).
+   - Add a meta viewport tag and title (`Metabolic Health Coach`).
+   - Include a script to register `service-worker.js`.
+2. **Create Custom Styles** (`src/styles.css`):
+   - Define minimal styles (e.g., `.container { max-width: 1200px; }`) to complement Tailwind CSS.
+   - Ensure WCAG 2.1 accessibility (high-contrast text, focus states).
+3. **Create the Main App Component** (`src/App.jsx`):
+   - Create a functional React component that:
+     - Uses `useState` for `user` (JWT payload), `content` (content array), `loading` (boolean).
+     - Uses `useEffect` to fetch `/api/auth/verify` with the JWT cookie to set `user`.
+     - Fetches `/api/content` with tags based on user `sideEffects` or `condition`.
+     - Renders a loading spinner (Tailwind: `text-center mt-10`).
+     - Conditionally renders:
+       - If logged in: `<Navbar user={user} />`, a grid of `<ContentCard>` components, `<SideEffectTracker>`, `<DoseReminder>`.
+       - If not logged in: A form for login/register (email, password inputs; Tailwind: `bg-white p-6 rounded shadow`).
+     - Uses Tailwind: `min-h-screen bg-gray-100`, `container mx-auto p-4`.
+4. **Create the Navbar Component** (`src/components/Navbar.jsx`):
+   - Create a functional component accepting a `user` prop.
+   - Render a nav bar (Tailwind: `bg-blue-600 text-white p-4`) with:
+     - Title (`Metabolic Health Coach`, `text-xl font-bold`).
+     - If logged in, a “Log Out” button (`bg-red-500 px-4 py-2 rounded`) that clears the JWT cookie and reloads.
+     - Flexbox layout (`flex justify-between items-center`).
+5. **Create the ContentCard Component** (`src/components/ContentCard.jsx`):
+   - Create a functional component accepting props (`contentId`, `title`, `description`, `type`, `tags`, `url`).
+   - Render a card (Tailwind: `bg-white p-4 rounded shadow`) with:
+     - Title (`text-xl font-semibold`).
+     - Description (`text-gray-600`).
+     - Type and tags (`text-sm text-gray-500`).
+     - If `url` is a YouTube link, embed an `<iframe>` (`w-full h-64`).
+   - Add `aria-label` for accessibility.
+6. **Create the SideEffectTracker Component** (`src/components/SideEffectTracker.jsx`):
+   - Create a functional component accepting a `userId` prop.
+   - Render a form (Tailwind: `bg-white p-4 rounded shadow`) with:
+     - Dropdown for symptoms (nausea, fatigue; `border p-2 rounded`).
+     - Range slider for severity (1–10; `w-full`).
+     - Textarea for notes (`border p-2 rounded w-full`).
+     - Submit button (`bg-blue-500 text-white px-4 py-2 rounded`).
+   - On submit, POST to `/api/sideEffects`.
+   - Fetch recent logs (GET `/api/sideEffects?userId={userId}&limit=5`) and display (Tailwind: `mt-4`).
+   - Show tips (e.g., “Try low-fat recipes” for nausea; hardcode or fetch from `/api/content`).
+7. **Create the DoseReminder Component** (`src/components/DoseReminder.jsx`):
+   - Create a functional component accepting a `userId` prop.
+   - Render a form (Tailwind: `bg-white p-4 rounded shadow`) with inputs for medication, dose, time, frequency.
+   - On submit, POST to `/api/schedules`.
+   - Fetch schedules (GET `/api/schedules?userId={userId}`) and display (Tailwind: `mt-4`).
+   - Show alerts for reminders (MVP: on-screen; Phase 2: Firebase Cloud Messaging).
+8. **Add Offline Support**:
+   - Create `public/service-worker.js` to cache static assets (`index.html`, `styles.css`) and API responses (`/api/content`).
+   - Register the service worker in `index.html` using `navigator.serviceWorker.register('/service-worker.js')`.
+   - Use the Cache API for offline content access.
+
+#### Step 5: Implement Core Features
+1. **Educational Content Library**:
+   - Populate MongoDB `content` collection with sample data:
+     - Nutrition: `{ title: "Low-Fat Smoothie", description: "Blend spinach, banana...", type: "nutrition", tags: ["nausea", "high-fiber"], url: "https://youtube.com/..." }`.
+     - Exercise: `{ title: "5-Min Walk", description: "Low-energy walk...", type: "exercise", tags: ["fatigue"], url: "https://youtube.com/..." }`.
+     - Behavioral: `{ title: "Managing Plateaus", description: "Tips for progress...", type: "behavioral", tags: ["plateau"], url: "https://youtube.com/..." }`.
+   - In `App.jsx`, fetch `/api/content` with dynamic tags based on user `sideEffects` or `condition`.
+   - Embed YouTube videos in `ContentCard.jsx` using `<iframe>` (`allowfullscreen`).
+   - Use placeholder YouTube links for MVP, simulating Academy of Nutrition and Dietetics content.
+2. **Side Effect Tracker**:
+   - In `SideEffectTracker.jsx`, save logs to `/api/sideEffects` and fetch recent logs.
+   - Display tips (e.g., “Try low-fat recipes” for nausea) by querying `/api/content`.
+   - Track log frequency in MongoDB for RWD.
+3. **Personalized Dose Management**:
+   - In `DoseReminder.jsx`, save schedules to `/api/schedules` and fetch reminders.
+   - Display alerts (MVP: on-screen; Phase 2: Firebase Cloud Messaging).
+
+#### Step 6: Add Data-Driven Features
+1. **RWE Generation**:
+   - Use Firebase Analytics to log events (`log_side_effect`, `view_content`, `set_reminder`).
+   - Store anonymized data in MongoDB `sideEffects` with a `consent` flag.
+2. **Commercial Insight**:
+   - Track frequent symptoms in MongoDB (e.g., count `muscle loss` queries).
+3. **Progress Linking**:
+   - In `ContentCard.jsx`, show static motivational messages (e.g., “Users who followed this meal plan saw 23% less nausea”) for MVP.
+
+#### Step 7: Ensure Accessibility and Performance
+1. **Accessibility**:
+   - Follow WCAG 2.1:
+     - Add `aria-label` to buttons, cards, forms.
+     - Use high-contrast Tailwind classes (`text-gray-900` on `bg-white`).
+     - Ensure keyboard navigation (`tabIndex`).
+   - Test with a screen reader (e.g., NVDA).
+2. **Performance**:
+   - Use `React.memo` for `ContentCard`.
+   - Lazy-load cards with `IntersectionObserver`.
+   - Optimize MongoDB queries with indexes (e.g., on `userId`, `tags`).
+
+#### Step 8: Test the App
+1. **Unit Tests**:
+   - Add `jest` and `@testing-library/react` to `package.json` (optional for MVP).
+   - Test `ContentCard`, `SideEffectTracker`, `DoseReminder`.
+2. **Integration Tests**:
+   - Test MongoDB integration (save/fetch logs, schedules).
+   - Test Express routes (`/api/auth/*`, `/api/content`, etc.).
+   - Simulate offline mode in Chrome DevTools.
+3. **User Flow Testing**:
+   - Test: Register, log in, log side effect, set reminder, view content.
+   - Verify responsive design in Replit’s preview.
+
+#### Step 9: Deploy the App
+1. **Local Testing**:
+   - Run `npm run dev` to start the Express server.
+   - Test in Replit’s preview (port 3000).
+2. **Deploy to Replit**:
+   - Use Replit’s Autoscale or Reserved VM deployment.
+   - Set `.env` variables in Replit Secrets.
+   - Ensure MongoDB and Firebase connections work.
+3. **Alternative: Deploy to Render**:
+   - Install Render CLI: `npm install -g render-cli`.
+   - Run `render login` and deploy with `render deploy`.
+   - Configure env vars in Render’s dashboard.
+   - Verify at the Render URL (e.g., `https://metabolic-health-coach.onrender.com`).
+
+#### Step 10: Plan for Future Phases
+1. **Phase 2**:
+   - Integrate wearables (Apple Health, Fitbit, Dexcom) via APIs, store in MongoDB.
+   - Add AI adherence alerts (use Express route with Firebase Cloud Functions).
+2. **Phase 3**:
+   - Implement WebXR for AR tutorials (use A-Frame).
+   - Add forums using MongoDB and Firebase Realtime Database.
+   - Build VR expectation manager (static visualizations for MVP).
+
+#### Step 11: Documentation
+1. **Create README.md**:
+   - Describe app purpose, MVP features, setup (React, Express, MongoDB, Firebase).
+   - List dependencies, env vars, deployment steps (Replit/Render).
+   - Explain adding content to MongoDB `content` collection.
+2. **User Guide**:
+   - Detail user flows: Register, log in, log side effects, set reminders, view content.
+   - Explain offline access and notifications.
+
+### Deliverables
+- A production-ready React.js and Express.js app on Replit, deployed to Replit/Render, with:
+  - Responsive Tailwind CSS UI (WCAG 2.1 compliant).
+  - MongoDB integration for data storage.
+  - Firebase Cloud Messaging and Analytics for notifications and RWD.
+  - Custom JWT-based authentication.
+  - MVP features: Educational content library, side effect tracker, dose management.
+  - Offline access via service workers.
+  - Foundation for Phase 2 (wearables, AI) and Phase 3 (AR, forums).
+- Documentation (`README.md`) for setup, deployment, and maintenance.
+- Analytics for RWD and commercial insights.
+
+### Success Metrics
+- Adherence: Target 2.1x higher 6-month adherence.
+- Engagement: Aim for 72% content engagement (via Firebase Analytics).
+- Retention: Achieve 34% higher retention with personalized content.
+- RWD: Collect anonymized data for adherence studies.
+- Competitive Edge: Outperform competitors with hyper-personalized content.
+
+This prompt provides a comprehensive guide for Replit to build a production-ready Metabolic Health Coach app using React.js, Express.js, MongoDB, and Firebase, with custom authentication and scalability.

@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { setAuthToken } from "@/lib/auth";
 import { Heart } from "lucide-react";
@@ -15,6 +15,7 @@ import { useLocation } from "wouter";
 export default function Login() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const [loginData, setLoginData] = useState({
     email: "",
@@ -36,11 +37,14 @@ export default function Login() {
     },
     onSuccess: (data) => {
       setAuthToken(data.token);
+      // Invalidate auth query to trigger refetch with new token
+      queryClient.invalidateQueries({ queryKey: ['/api/auth/verify'] });
       toast({
         title: "Welcome back!",
         description: "You've been successfully logged in.",
       });
-      setLocation("/");
+      // Small delay to ensure query refetch happens before navigation
+      setTimeout(() => setLocation("/"), 100);
     },
     onError: (error: any) => {
       toast({
@@ -58,11 +62,14 @@ export default function Login() {
     },
     onSuccess: (data) => {
       setAuthToken(data.token);
+      // Invalidate auth query to trigger refetch with new token
+      queryClient.invalidateQueries({ queryKey: ['/api/auth/verify'] });
       toast({
         title: "Account created!",
         description: "Welcome to Metabolic Health Coach.",
       });
-      setLocation("/");
+      // Small delay to ensure query refetch happens before navigation
+      setTimeout(() => setLocation("/"), 100);
     },
     onError: (error: any) => {
       toast({

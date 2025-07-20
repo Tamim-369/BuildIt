@@ -16,8 +16,9 @@ function AuthChecker({ children }: { children: React.ReactNode }) {
     queryKey: ['/api/auth/verify'],
     enabled: !!token,
     queryFn: async () => {
+      const headers = getAuthHeaders();
       const response = await fetch('/api/auth/verify', {
-        headers: getAuthHeaders()
+        headers: Object.keys(headers).length > 0 ? headers : undefined
       });
       if (!response.ok) {
         throw new Error('Authentication failed');

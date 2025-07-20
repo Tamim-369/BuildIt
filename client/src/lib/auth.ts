@@ -21,7 +21,7 @@ export const removeAuthToken = (): void => {
   queryClient.clear();
 };
 
-export const getAuthHeaders = () => {
+export const getAuthHeaders = (): Record<string, string> => {
   const token = getAuthToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 };

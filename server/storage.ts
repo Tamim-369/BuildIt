@@ -109,6 +109,8 @@ export class MemStorage implements IStorage {
     const user: User = { 
       ...insertUser, 
       id,
+      condition: insertUser.condition || null,
+      preferences: insertUser.preferences || null,
       createdAt: new Date()
     };
     this.users.set(id, user);
@@ -132,6 +134,8 @@ export class MemStorage implements IStorage {
     const content: Content = {
       ...insertContent,
       id,
+      url: insertContent.url || null,
+      duration: insertContent.duration || null,
       createdAt: new Date()
     };
     this.content.set(id, content);
@@ -143,6 +147,7 @@ export class MemStorage implements IStorage {
     const sideEffect: SideEffect = {
       ...insertSideEffect,
       id,
+      notes: insertSideEffect.notes || null,
       timestamp: new Date()
     };
     this.sideEffects.set(id, sideEffect);
@@ -162,6 +167,7 @@ export class MemStorage implements IStorage {
     const medication: Medication = {
       ...insertMedication,
       id,
+      isActive: insertMedication.isActive !== undefined ? insertMedication.isActive : true,
       createdAt: new Date()
     };
     this.medications.set(id, medication);
